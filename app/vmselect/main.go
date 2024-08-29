@@ -61,6 +61,9 @@ var (
 		"Enterprise version of VictoriaMetrics supports automatic discovery of vmstorage addresses via DNS SRV records. For example, -storageNode=srv+vmstorage.addrs . "+
 		"See https://docs.victoriametrics.com/cluster-victoriametrics/#automatic-vmstorage-discovery")
 
+	recentStorageNodes     = flagutil.NewArrayString("recent.StorageNode", "Comma-separated addresses of vmstorage nodes; usage: -recent.storageNode=vmstorage-host1,...,vmstorage-hostN . ")
+	recentStorageRetention = flag.Duration("recent.storageRetention", 7*24*time.Hour, "retention of recent storage nodes. Default is 7 days")
+
 	clusternativeListenAddr = flag.String("clusternativeListenAddr", "", "TCP address to listen for requests from other vmselect nodes in multi-level cluster setup. "+
 		"See https://docs.victoriametrics.com/cluster-victoriametrics/#multi-level-cluster-setup . Usually :8401 should be set to match default vmstorage port for vmselect. Disabled work if empty")
 )
@@ -106,8 +109,17 @@ func main() {
 	if duplicatedAddr := checkDuplicates(*storageNodes); duplicatedAddr != "" {
 		logger.Fatalf("found equal addresses of storage nodes in the -storageNodes flag: %q", duplicatedAddr)
 	}
+	if len(*recentStorageNodes) > 0 {
+		logger.Infof("starting netstorage at recentStorageNodes %s", *recentStorageNodes)
+		if hasEmptyValues(*recentStorageNodes) {
+			logger.Fatalf("found empty address of storage node in the -recent.storageNode flag, please make sure that all -recent.storageNode args are non-empty")
+		}
+		if duplicatedAddr := checkDuplicates(*recentStorageNodes); duplicatedAddr != "" {
+			logger.Fatalf("found equal addresses of storage nodes in the -recent.storageNode flag: %q", duplicatedAddr)
+		}
+	}
 
-	netstorage.Init(*storageNodes)
+	netstorage.Init(*storageNodes, *recentStorageNodes)
 	logger.Infof("started netstorage in %.3f seconds", time.Since(startTime).Seconds())
 
 	if len(*cacheDataPath) > 0 {

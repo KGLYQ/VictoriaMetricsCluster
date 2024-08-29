@@ -1675,6 +1675,11 @@ func ProcessSearchQuery(qt *querytracer.Tracer, denyPartialResponse bool, sq *st
 		MaxTimestamp: sq.MaxTimestamp,
 	}
 	sns := getStorageNodes()
+	now := time.Now().UnixNano() / int64(time.Second)
+	if sq.MinTimestamp >= now-int64((7*24*time.Hour).Seconds()) {
+		// It is faster to search for recent data in recent storage nodes.
+		sns = getRecentStorageNodes()
+	}
 	tbfw := newTmpBlocksFileWrapper(sns)
 	blocksRead := newPerNodeCounter(sns)
 	samples := newPerNodeCounter(sns)
@@ -2940,6 +2945,7 @@ type storageNodesBucket struct {
 }
 
 var storageNodes atomic.Pointer[storageNodesBucket]
+var recentStorageNodes atomic.Pointer[storageNodesBucket]
 
 func getStorageNodesBucket() *storageNodesBucket {
 	return storageNodes.Load()
@@ -2954,12 +2960,29 @@ func getStorageNodes() []*storageNode {
 	return snb.sns
 }
 
+func getRecentStorageNodesBucket() *storageNodesBucket {
+	return recentStorageNodes.Load()
+}
+
+func setRecentStorageNodesBucket(snb *storageNodesBucket) {
+	recentStorageNodes.Store(snb)
+}
+
+func getRecentStorageNodes() []*storageNode {
+	snb := getRecentStorageNodesBucket()
+	return snb.sns
+}
+
 // Init initializes storage nodes' connections to the given addrs.
 //
 // MustStop must be called when the initialized connections are no longer needed.
-func Init(addrs []string) {
+func Init(addrs []string, recentStorageAddrs []string) {
 	snb := initStorageNodes(addrs)
 	setStorageNodesBucket(snb)
+	if len(recentStorageAddrs) > 0 {
+		recentSnb := initStorageNodes(recentStorageAddrs)
+		setRecentStorageNodesBucket(recentSnb)
+	}
 }
 
 // MustStop gracefully stops netstorage.
