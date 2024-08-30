@@ -119,7 +119,7 @@ func main() {
 		}
 	}
 
-	netstorage.Init(*storageNodes, *recentStorageNodes)
+	netstorage.Init(*storageNodes, *recentStorageNodes, *recentStorageRetention)
 	logger.Infof("started netstorage in %.3f seconds", time.Since(startTime).Seconds())
 
 	if len(*cacheDataPath) > 0 {

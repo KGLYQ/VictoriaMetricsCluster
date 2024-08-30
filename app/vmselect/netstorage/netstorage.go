@@ -1676,7 +1676,7 @@ func ProcessSearchQuery(qt *querytracer.Tracer, denyPartialResponse bool, sq *st
 	}
 	sns := getStorageNodes()
 	now := time.Now().UnixNano() / int64(time.Second)
-	if sq.MinTimestamp >= now-int64((7*24*time.Hour).Seconds()) {
+	if sq.MinTimestamp >= now-int64(getRecentStorageRetention().Seconds()) {
 		// It is faster to search for recent data in recent storage nodes.
 		sns = getRecentStorageNodes()
 	}
@@ -2946,6 +2946,7 @@ type storageNodesBucket struct {
 
 var storageNodes atomic.Pointer[storageNodesBucket]
 var recentStorageNodes atomic.Pointer[storageNodesBucket]
+var recentStorageRetention time.Duration
 
 func getStorageNodesBucket() *storageNodesBucket {
 	return storageNodes.Load()
@@ -2973,16 +2974,25 @@ func getRecentStorageNodes() []*storageNode {
 	return snb.sns
 }
 
+func setRecentStorageRetention(d time.Duration) {
+	recentStorageRetention = d
+}
+
+func getRecentStorageRetention() time.Duration {
+	return recentStorageRetention
+}
+
 // Init initializes storage nodes' connections to the given addrs.
 //
 // MustStop must be called when the initialized connections are no longer needed.
-func Init(addrs []string, recentStorageAddrs []string) {
+func Init(addrs []string, recentStorageAddrs []string, recentStorageRetention time.Duration) {
 	snb := initStorageNodes(addrs)
 	setStorageNodesBucket(snb)
 	if len(recentStorageAddrs) > 0 {
 		recentSnb := initStorageNodes(recentStorageAddrs)
 		setRecentStorageNodesBucket(recentSnb)
 	}
+	setRecentStorageRetention(recentStorageRetention)
 }
 
 // MustStop gracefully stops netstorage.
